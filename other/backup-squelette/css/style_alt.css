@@ -173,16 +173,8 @@
      text-decoration: none;
      border-radius: 3px
  }
-#h2-ref{
-	margin-left: 120px;
-}
-#h2-avis{
-	 margin-left: 58%;
-}
-
-#h2-res-ext {
-	margin-left: 134px;
-}
+ 
+ 
  
 .animation-avis {
   display: inline-block;
@@ -539,7 +531,7 @@
 
  } 
  #avis-h2{
-	 margin-left: 0px !important;
+	 margin-left: none !important;
 	 float: right
 
  }

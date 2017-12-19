@@ -32,7 +32,7 @@
     <div class="wrapper row1">
         <header class="clear" id="header">
             <div id="hgroup">
-                <img alt="Logo" class="header-logo" src="./img/logo.png">
+                <img class="header-logo" alt="Logo" src="img/logo.png" onclick="window.location.href = 'index.html';" />
                 <h2 class="hgroup-slogan"><b>|</b> Bienvenue sur le site officiel du groupe 19</h2>
             </div>
             <nav>
@@ -41,7 +41,7 @@
                         <a class="wrapper-row1-header-li" href="index.html"><b>Accueil</b></a>
                     </li>
                     <li>
-                        <a href="download.html">Téléchargements</a>
+                        <a href="download.html" class="wrapper-row1-header-li menu-border">Téléchargements</a>
                     </li>
                     <li>
                         <a href="avis.html">Donner son avis</a>
@@ -60,10 +60,10 @@
         <br>
         <br>
         <div class="clear" id="container">
-            <section class="clear" id="slider">
+            <section class="clear main-border" id="slider">
                 <figure>
                     <figcaption style="height:500px; width: 920px;">
-                        <h2>Ressources externes téléchargeables</h2><br>
+                        <h2 id="h2-res-ext">Ressources externes téléchargeables</h2><br>
                         <img alt="Décoration avis" class="img-download" src="img/bg-download.png">
                         <div class="form-download">
                             <!--  Brief client // Avant-projet // Compte-rendu des réunions -->
