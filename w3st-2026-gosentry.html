@@ -1,0 +1,613 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>gosentry — How it's built</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/theme/black.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/highlight/monokai.css">
+  <style>
+    :root {
+      --r-heading-color: #58a6ff;
+      --r-link-color: #58a6ff;
+      --r-background-color: #0d1117;
+      --r-main-font-size: 28px;
+      --fs-copy: 0.76em;
+      --fs-support: 0.76em;
+      --fs-mini: 0.62em;
+      --fs-code: 0.55em;
+    }
+    .reveal { font-family: 'Inter', 'Helvetica Neue', sans-serif; }
+    .reveal h1, .reveal h2, .reveal h3 { font-weight: 700; text-transform: none; }
+    .reveal h1 { font-size: 2em; }
+    .reveal h2 { font-size: 1.4em; }
+    .reveal h3 { font-size: 1.1em; color: #8b949e; }
+    .reveal pre { font-size: var(--fs-code); width: 95%; box-shadow: none; }
+    .reveal pre code { max-height: 500px; padding: 14px; border-radius: 8px; line-height: 1.35; }
+    .reveal ul { font-size: var(--fs-copy); }
+    .reveal li { margin-bottom: 0.4em; }
+    .reveal .small { font-size: var(--fs-support); color: #8b949e; }
+    .reveal .accent { color: #58a6ff; }
+    .reveal .warn { color: #f0883e; }
+    .reveal .green { color: #3fb950; }
+    .feature-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: var(--fs-copy); text-align: left; }
+    .feature-grid .item { background: rgba(88,166,255,0.08); border-left: 3px solid #58a6ff; padding: 8px 12px; border-radius: 4px; }
+    .feature-grid .item strong { color: #58a6ff; }
+    .arch-box { background: rgba(255,255,255,0.05); border: 1px solid #30363d; border-radius: 8px; padding: 14px 18px; font-family: monospace; font-size: var(--fs-mini); text-align: left; line-height: 1.6; }
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; align-items: start; }
+    .storyline { display: flex; align-items: stretch; justify-content: center; gap: 14px; margin-top: 0.8em; }
+    .story-step { background: rgba(255,255,255,0.05); border: 1px solid #30363d; border-radius: 8px; padding: 16px; text-align: left; font-size: var(--fs-copy); line-height: 1.5; width: 260px; }
+    .story-arrow { display: flex; align-items: center; font-size: 1.2em; color: #8b949e; }
+    .reveal .tag { display: inline-block; background: rgba(88,166,255,0.15); color: #58a6ff; padding: 2px 8px; border-radius: 4px; font-size: 0.7em; margin: 2px; }
+    .reveal .tag-warn { background: rgba(240,136,62,0.15); color: #f0883e; }
+    .reveal .tag-green { background: rgba(63,185,80,0.15); color: #3fb950; }
+    .lesson-box { background: rgba(63,185,80,0.06); border-left: 3px solid #3fb950; padding: 8px 14px; border-radius: 4px; margin: 6px 0; text-align: left; font-size: var(--fs-copy); }
+    .reveal .tob-logo { position: fixed; bottom: 20px; left: 20px; height: 65px; opacity: 0.75; z-index: 100; pointer-events: none; }
+    /* Normalize slide-local font overrides into one shared presentation scale. */
+    .reveal [style*="font-size:0.9em"],
+    .reveal [style*="font-size:0.85em"],
+    .reveal [style*="font-size:0.82em"],
+    .reveal [style*="font-size:0.8em"],
+    .reveal [style*="font-size:0.78em"],
+    .reveal [style*="font-size:0.75em"] { font-size: var(--fs-copy) !important; }
+    .reveal [style*="font-size:0.72em"],
+    .reveal [style*="font-size:0.7em"],
+    .reveal [style*="font-size:0.68em"],
+    .reveal [style*="font-size:0.65em"] { font-size: var(--fs-support) !important; }
+    .reveal [style*="font-size:0.62em"],
+    .reveal [style*="font-size:0.58em"] { font-size: var(--fs-mini) !important; }
+    .reveal pre,
+    .reveal pre[style*="font-size"] { font-size: var(--fs-code) !important; }
+  </style>
+</head>
+<body>
+<div class="reveal">
+<img class="tob-logo" src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjY1IiBoZWlnaHQ9IjE1OSIgdmlld0JveD0iMCAwIDI2NSAxNTkiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxnIGNsaXAtcGF0aD0idXJsKCNjbGlwMF8yMDAzXzE3OCkiPgo8cGF0aCBkPSJNOTUuOTY0NSAxNTUuMjAxTDc0LjUxMDggMTQzLjQyN0w2OS4zMzIgMTU5TDk1LjkyNTEgMTU1LjIxQzk1Ljg0MzMgMTU1LjIxIDk1LjgwMzggMTU1LjIxIDk1Ljk2NDUgMTU1LjIwMVoiIGZpbGw9IiNGQUZBRkEiLz4KPHBhdGggZD0iTTk1Ljk2MDggMTU1LjIwMUw5NS45MjEzIDE1NS4yMUM5Ni4wMiAxNTUuMjEgOTYuMTkyIDE1NS4yMDEgOTUuOTYwOCAxNTUuMjAxWk0xNjkuNzk3IDE0Ny42MkwxODcuMDYyIDE0Mi40OThMMTkzLjU0OCAxMjEuODg1TDE3Ny42MDYgMTIyLjk4NEwxNjkuNzk3IDE0Ny42MlpNMjEwLjg4NiAxNS41NTM2TDE5Ny42OTMgNi45MzYzOEwxOTAuMzA2IDMwLjU5MzNMMjA0LjgyNSAzNC45ODg1TDIxMC44ODYgMTUuNTUzNlpNMTIxLjg1NSAxMC4wMjg0QzEyMS44NTUgMTAuMDI4NCAxMzAuNzk3IDEyLjc5MSAxMzQuMzI0IDEzLjc5ODlMMTQ3LjAzMiAxNy41ODk0TDE0Ny4yNTUgMEwxMjQuOTA1IDQuNDc0NzFMMTIxLjg1NSAxMC4wMjg0Wk0zMy4xMjc2IDc1LjcyOTRMNDguODE5IDc1Ljc2OTJMNTQuNDA2NSA1OC4xMjAyTDQwLjE0MTcgNTQuMzA5OUMzOC42MjUgNTkuMTU5NCAzNC42NzI1IDcwLjg4MjggMzMuMTI3NiA3NS43Mjk0Wk0zLjkyOTY5IDU5LjMyOTdMMTUuNjY4NiA3MS42NDY1TDIyLjQyODkgNDkuNzk1NEw4LjAyMzA5IDQ1Ljk0MjVMMy45Mjk2OSA1OS4zMjk3Wk0yNTIuNTkzIDEyOS44NkMyNTIuMzUgMTIzLjY3MSAyNTAuNjQyIDEyMS42NDQgMjQ3LjAxNiAxMTcuODQ1TDIyOC4xIDExOS4xMTRDMjMzLjM3NSAxMjIuNDUgMjM2LjYwOCAxMjYuNTgxIDIzNy4yNzYgMTMyLjEyNkMyMzguMDEyIDEzOC4yMTYgMjMxLjQ0NiAxNDUuMjUyIDIyNS4wOTIgMTQ1LjI1MkMyMjEuNTQ1IDE0NS4yNTIgMjE5Ljc3OCAxNDIuNDUgMjE5Ljc3OCAxMzkuMjMzQzIxOS44NzYgMTM2LjgzNCAyMjAuNzE3IDEzMy43MTkgMjIxLjk2OCAxMzEuNjQzSDIwNS45MjRDMjA0LjY3MyAxMzQuODY5IDIwMy42MzMgMTM4LjUwOSAyMDMuNjMzIDE0MS45MzZDMjAzLjYzMyAxNTMuNjc5IDIxMy45NDggMTU2LjY5MiAyMjMuNzM2IDE1Ni42OTJDMjMzLjk0MSAxNTYuNjkyIDI0Mi4zODcgMTU0LjcxNiAyNDcuNzAxIDE0NS4yNDlDMjUwLjA5OCAxNDAuOTc2IDI1Mi43OTMgMTM0Ljg0OSAyNTIuNTkzIDEyOS44NloiIGZpbGw9IiNGQUZBRkEiLz4KPHBhdGggZD0iTTU4LjM3NTIgNDUuMTM5QzYwLjE0NTYgNDUuMDI1NCA2MS45MjE3IDQ1LjAyNTQgNjMuNjkyMSA0NS4wMjU0QzY2LjYwOTkgNDUuMDE2OSA3MC45ODUyIDQ1LjIyOTggNzAuOTg1MiA0OS4yODE1QzcwLjk5NjUgNTIuMDgzOSA2OS45NTM0IDU1LjYyMTYgNjkuMTI0NiA1OC4zMjE4QzY3LjU3MTMgNjMuODM1NyA2NS43MDIyIDY5LjMzODIgNjUuMzg5MiA3NC45NTQzTDgxLjUzNDUgNzQuOTM0NEM4MS4xMDg4IDY1Ljg5MTMgODYuNzI3NCA1Ny45ODk2IDg2LjcxNjEgNDkuMDQ4N0M4Ni43MTYxIDQzLjAyMDkgODIuMTI5MyA0MC42MzMgNzYuODE1MiAzOS42OTYxTDc4LjM3MTQgMzkuNDgzMUM4OS45Mzg0IDM3LjkxMDIgOTYuMzg1OCAyOC44Njk5IDk2LjM3NDUgMTcuNTM4M0M5Ni4zNjMyIDQuOTgwMTIgODUuODM2NSAxLjQ1MDg5IDc1LjEwNjggMS40NjIyNUw1Ni41NjgxIDEuNDgyMTJDNTEuMjk2MyAxNy44MTA5IDQ2LjI5MjMgMzQuMjMwNCA0MS4xNjk5IDUwLjYzMDJMNTUuNDI2NCA1NC40MzJMNTguMzc1MiA0NS4xMzlaTTY4LjM0OTMgMTMuMDAzOUw3My41NjE5IDEyLjk5MjZDNzcuNDIxNCAxMi45OTI2IDgxLjI2OTUgMTMuOTIxIDgxLjI4MDggMTguNDk4QzgxLjI4OTIgMjQuMTExMiA3Ny4yMjk3IDMzLjU3NDYgNzAuNTU5NSAzMy41NzQ2TDYyLjAxNDcgMzMuNTg1OUw2OC4zNDkzIDEzLjAwMzlaTTEwMi4wNjQgNzUuMTM2TDExMC4zNzcgNTkuNDMxOUwxMzAuMjggNTkuNDA5MkwxMjkuNjc0IDc1LjIwN0wxNDUuMzA0IDc1LjE5NTdMMTQ2LjU0NyAyMS40MTk2TDEzMy4xMTkgMTcuMzU5NEMxMzEuODc2IDI3LjQ0NzggMTMxLjIzOSAzNy42MDI1IDEzMS4yMTEgNDcuNzY4MkgxMzEuMTA5TDExNi4xMDYgNDcuNzc5NUMxMjEuNTAyIDM3LjU5NzggMTI2LjY3NSAyNy4zMzY3IDEzMS4zMjkgMTYuODE0M0wxMjAuNTc0IDEzLjU1NzZMODUuODA1NSA3NS4xNDQ2TDEwMi4wNjQgNzUuMTM2Wk0yMTIuNzEyIDc1LjAzMzhMMjE2LjY2NSA2My4wNjkxTDE5NS43MTkgNjMuMDk3NUwyMDMuNDggMzguNjQ1NUwxODguOTYxIDM0LjI1MDNMMTc2LjAzOCA3NS4wNjUxTDIxMi43MTIgNzUuMDMzOFpNMTE1LjcwMyA3OS43NDE0SDk1LjE3OTJMNzUuOTEzMSAxMzkuODc3TDEwMC40MzQgMTUzLjIwNUMxMTUuMTE2IDE1Mi42NDkgMTI1LjQgMTQxLjgxNCAxMjUuNCAxMjYuOTM2QzEyNS40IDEyMS4yMiAxMjEuODU0IDExNi43NTQgMTE2LjMzNyAxMTUuMTkzQzEyNy4xNzkgMTEyLjcwMyAxMzQuMTUxIDEwNS43MzggMTM0LjE1MSA5NC4zMDY5QzEzNC4xNCA4My4xNjg0IDEyNS40OTEgNzkuNzQxNCAxMTUuNzAzIDc5Ljc0MTRaTTEwNy4yNjUgMTM3LjQzQzEwNC4zNDQgMTQxLjc5NCAxMDEuMjIzIDE0Mi4xMDYgOTYuMzIzOCAxNDIuMTA2SDg5Ljk2OTRMOTYuOTQ5NiAxMjAuNDk2QzEwMi4wNTIgMTIwLjY5NSAxMTEuMTEzIDExOS40NTcgMTExLjExMyAxMjYuOTM2QzExMS4xMTMgMTMwLjI1MiAxMDkuMTQ1IDEzNC43MjcgMTA3LjI2NSAxMzcuNDNaTTEwNi4wMTMgMTA5Ljk4M0gxMDAuMTcyTDEwNi4zMTggOTAuOTU5NEMxMTAuOTAyIDkxLjE3MjMgMTE5LjU1MSA4OS43MjE0IDExOS41NTEgOTYuNzg4NEMxMTkuNjYzIDEwNS4xMDIgMTE0LjM0NyAxMDkuOTgzIDEwNi4wMTMgMTA5Ljk4M1pNMTY1LjM5OSAyNy4yMDZMMTQ5LjgzMSA3OS4xMzY2TDEzNi4wNzkgMTIxLjI2TDE1Mi41ODggMTE5Ljk5MUwxNjQuNTEzIDgyLjUxMjVIMTY0LjUzTDE4MC42MzYgMzEuNzUxN0MxNzguMzkyIDMxLjEyNzEgMTY5LjQ2MSAyOC4yNjUxIDE2NS40MDEgMjcuMjA2TTE3My4xMiA3OS44NTIxTDE2OS4yNTggOTEuOTk4NkgxODcuMjk1TDE3OC44NTcgMTE5LjA0M0wxOTQuNTk5IDExNy45NjRMMjAyLjgxMSA5MS45OTg2SDIxOC40MzJMMjIyLjI5NSA3OS44NTIxSDE3My4xMlpNMjQ0LjU4OCA3OS4xMTY3QzIyOC40NDYgNzkuMTE2NyAyMTguODU4IDkwLjMzNDcgMjE4Ljg1OCAxMDUuOTMxQzIxOC44NzggMTA4LjE5NyAyMjAuOTA4IDExMy43ODIgMjI1LjA2IDExNS42NDdMMjQ0LjQ3OSAxMTQuMzM1QzI0MS4xNzQgMTExLjU1MyAyMzUuMzM2IDEwNC45OTQgMjM1LjMzNiAxMDEuNTA0QzIzNS4zMzYgOTYuNzE3NCAyMzguMDE0IDkwLjQ1NjggMjQzLjU0IDkwLjQ1NjhDMjQ3LjI4OSA5MC40NTY4IDI0OS41ODEgOTEuNDk2IDI0OS41ODEgOTUuNTQ3N0MyNDkuNTgxIDk4LjE0ODQgMjQ4LjMyOSAxMDAuNTM2IDI0Ny42MDIgMTAzLjAzOEgyNjIuNjA2QzI2My41NDQgMTAwLjg1MSAyNjQuOTk5IDk1Ljg2IDI2NC45OTkgOTMuNTcxNUMyNjUuMDEgODIuMjMxNCAyNTMuOTY4IDc5LjExNjcgMjQ0LjU4OCA3OS4xMTY3Wk02Ni41NTkyIDgwLjE3NThDNTkuMjE1MyA4MC4xNzU4IDU4LjE2MzggODUuNTg3NCA1Ni4zNDU0IDkxLjMzNDJDNTUuNzM5MyA5My40MDEyIDU0LjU4OTEgOTUuOTE5NiA1NC41ODkxIDk4LjA4ODhDNTQuNTg5MSAxMDIuMjYzIDU4LjI5NjIgMTAzLjA1OCA2MS43NDEzIDEwMy4wNThDNjUuOTUzMSAxMDMuMDg2IDY4LjE5NzEgMTAxLjY3NSA2OS42OTEzIDk3LjcyNTRDNzAuNzExOCA5NS4wMjI0IDczLjM3MDIgODcuNTk0OCA3My4zNzAyIDg0Ljk4MjdDNzMuMzcwMiA4MS4yODMxIDY5LjYzMjEgODAuMTc1OCA2Ni41NTkyIDgwLjE3NThaTTY4LjYxMTUgODUuNDg1MkM2OC42MTE1IDg2LjQxNjUgNjcuNTYgODkuNDM3NSA2Ny4yMDc2IDkwLjQ5NjZMNjUuNTgwOSA5NS41NTYyQzY0Ljk0MzggOTcuNDcyNyA2NC4xNzcgOTkuNjcwMyA2MS43NDk3IDk5LjY3MDNDNjAuMzc2OCA5OS42NzAzIDU5LjQ4ODggOTguODc1MyA1OS40ODg4IDk3LjQ0MTVDNTkuNDg4OCA5NS41ODc0IDYwLjkyMzcgOTIuMTQ5IDYxLjUyOTggOTAuMjM1NEM2Mi4xMzU5IDg4LjMzMDIgNjIuOTMzOCA4NC41Mjg0IDY1LjA0NTMgODMuNzkzQzY1LjUxODkgODMuNjM0IDY2LjAzNDggODMuNTcxNiA2Ni41NTA3IDgzLjU3MTZDNjcuNTA5MiA4My41NzE2IDY4LjY2MjMgODQuNDI5IDY4LjY2MjMgODUuNDU2OEw2OC42MTE1IDg1LjQ4NTJaTTg1LjI1MDEgOTMuMDc3NUw4Ni4zNjA5IDg5LjQwOTFINzkuOTc4M0w4MS43MDY1IDgzLjkzNUg4OC40MTZMODkuNjAwMSA4MC4yNjY2SDc3Ljk2ODNMNzAuOTc2OCAxMDIuNzY1SDc1Ljg2OEw3OC44OTg2IDkzLjA3NzVIODUuMjUwMVoiIGZpbGw9IiNGQUZBRkEiLz4KPHBhdGggZD0iTTMuODM5NjggMS42MzUzOUw1My4wMTEzIDEuNTg5OTdMNDkuMTcxNiAxMy43NDc4TDMzLjU0MjIgMTMuNzY3N0wyMy41MzE0IDQ1LjkxNDFMOS4xMTQzMSA0Mi4wNjRMMTguMDI1NiAxMy43NzlMMCAxMy43OTg5TDMuODM5NjggMS42MzUzOVoiIGZpbGw9IiNGQUZBRkEiLz4KPC9nPgo8ZGVmcz4KPGNsaXBQYXRoIGlkPSJjbGlwMF8yMDAzXzE3OCI+CjxyZWN0IHdpZHRoPSIyNjUiIGhlaWdodD0iMTU5IiBmaWxsPSJ3aGl0ZSIvPgo8L2NsaXBQYXRoPgo8L2RlZnM+Cjwvc3ZnPgo=" alt="Trail of Bits">
+<div class="slides">
+
+<!-- ============================================================ -->
+<!-- TITLE -->
+<!-- ============================================================ -->
+<section>
+  <h1>gosentry</h1>
+  <h3>A security-focused and fuzzing-oriented fork of the Go toolchain</h3>
+  <p class="small" style="margin-top:1.5em;"><a href="https://github.com/trailofbits/gosentry">https://github.com/trailofbits/gosentry</a> </p>
+  <p class="small">Kevin Valerio, Trail of Bits -- W3ST 2026</p>
+</section>
+
+<!-- ============================================================ -->
+<!-- HISTORY / MOTIVATION -->
+<!-- ============================================================ -->
+<section>
+  <h2>Why that tool?</h2>
+  <p style="font-size:0.85em; margin-bottom:1em;">
+    Rust has a <span class="accent">rich fuzzing ecosystem</span> (LibAFL, afl-rs, Nautilus, CMPLOG, etc).<br>
+    Go has <code>go test -fuzz</code> &mdash; and not much else (that adds value).
+  </p>
+  <p style="font-size:0.85em; margin-bottom:1em;">
+    Objective: bridging that gap with an easy to use AND unique tool 
+  </p>
+  <ul style="font-size:0.8em;">
+    <li>Same <code>go test -fuzz</code> interface, no new workflow to learn</li>
+    <li>Easy to use <span class="accent"> by humans and agents</span></li>
+  </ul>
+</section>
+
+<!-- ============================================================ -->
+<!-- WHAT IS GOSENTRY + FEATURES -->
+<!-- ============================================================ -->
+<section>
+  <h2>What is gosentry?</h2>
+  <p style="font-size:0.82em; margin-bottom:0.8em;">
+    A fork of the <span class="accent">Go toolchain</span> that replaces <code>go test -fuzz</code> with state-of-the-art fuzzing &amp; bug detection.
+  </p>
+  <div class="feature-grid">
+    <div class="item"><strong>1.</strong> Struct-aware fuzzing &mdash; fuzz <code>struct</code> inputs directly</div>
+    <div class="item"><strong>2.</strong> Integer overflow &amp; truncation detection</div>
+    <div class="item"><strong>3.</strong> Panic on selected functions</div>
+    <div class="item"><strong>4.</strong> LibAFL integration</div>
+    <div class="item"><strong>5.</strong> Git-blame-oriented scheduling</div>
+    <div class="item"><strong>6.</strong> Catch races, goroutine leaks &amp; hangs</div>
+    <div class="item"><strong>7.</strong> Grammar-based fuzzing (Nautilus)</div>
+    <div class="item"><strong>8.</strong> Coverage report generation from corpus</div>
+  </div>
+  <p class="small" style="margin-top:0.6em;">Same CLI, same <code>testing.F</code></p>
+</section>
+
+<!-- ============================================================ -->
+<!-- FEATURE 1: STRUCT-AWARE FUZZING -->
+<!-- ============================================================ -->
+<section>
+  <section>
+    <h2>Feature 1 &mdash; Struct-aware fuzzing</h2>
+    <p style="font-size:0.82em;">Go's native fuzzer only supports scalars (<code>[]byte</code>, <code>string</code>, numbers).<br>gosentry lets you fuzz <span class="accent">structs, slices, arrays, pointers</span>.</p>
+    <pre><code class="language-go">type Input struct {
+    Data []byte
+    S    string
+    N    int
+    OK   bool
+}
+
+func FuzzStructInput(f *testing.F) {
+    f.Add(Input{Data: []byte("A"), S: "B", N: 7, OK: true})
+    f.Fuzz(func(t *testing.T, in Input) {
+        // fuzzer mutates `in` directly
+    })
+}</code></pre>
+  </section>
+
+  <section>
+    <h2>How it works &mdash; The glue</h2>
+    <div class="two-col">
+      <div>
+        <p style="font-size:0.75em;"><strong>Problem:</strong> LibAFL mutates raw <code>[]byte</code> so we need an encoding</p>
+        <p style="font-size:0.75em;"><strong>Why not JSON/gob?</strong> They reject most random inputs, bad for coverage, i.e generating "random" JSON will always most likely fail, wasting fuzzing cycles</p>
+        <p style="font-size:0.75em;"><strong>Solution:</strong> Custom format that is <span class="accent">tolerant to malformed data</span>. Any byte slice decodes into <em>some</em> struct value.</p>
+      </div>
+      <div>
+        <p style="font-size:0.7em; color:#8b949e;">Example: <code>Input{Data: []byte("A"), S: "hi", N: 7, OK: true}</code></p>
+<pre style="font-size:0.65em; margin:0;"><code class="language-text">01 41          // Data: len=1, "A"
+02 68 69       // S:    len=2, "hi"
+07 00 00 00 00 00 00 00  // N: int64 LE
+01             // OK:   true
+</code></pre>
+      </div>
+    </div>
+  </section>
+
+</section>
+
+<!-- ============================================================ -->
+<!-- FEATURE 2: OVERFLOW DETECTION -->
+<!-- ============================================================ -->
+<section>
+  <section>
+    <h2>Feature 2 &mdash; Integer overflow detection</h2>
+    <p style="font-size:0.82em;">Detect silent arithmetic bugs: overflow, underflow, lossy truncation.<br>
+    Inspired by <a href="https://github.com/trailofbits/go-panikint">go-panikint (gosentry actually started by go-panikint)</a>.</p>
+    <pre><code class="language-bash"># Disable overflow detection
+GOFLAGS='-gcflags=-overflowdetect=false' ./make.bash
+# Enable truncation detection
+GOFLAGS='-gcflags=-truncationdetect=true' ./make.bash</code></pre>
+  </section>
+
+  <section>
+    <h2>How it works &mdash; SSA instrumentation</h2>
+    <div class="two-col">
+      <div>
+        <p style="font-size:0.72em; color:#8b949e; margin-bottom:0.3em;">Normal Go SSA for <code>c := a + b</code></p>
+        <pre><code class="language-text">v1 = Arg "a"
+v2 = Arg "b"
+v3 = Add32 v1 v2</code></pre>
+      </div>
+      <div>
+        <p style="font-size:0.72em; margin-bottom:0.3em;"><span class="warn">gosentry-instrumented SSA</span></p>
+        <pre><code class="language-text">v1 = Arg "a"
+v2 = Arg "b"
+v3 = Add32 v1 v2
+v4 = IsOverflow(v1, v2, v3)  
+If v4 -> panicoverflow("+") </code></pre>
+      </div>
+    </div>
+    <p style="font-size:0.72em; margin-top:0.5em; color:#8b949e;">Example: <code>int8(120) + int8(10)</code> = <code>-126</code> (wrapped). IsOverflow checks: both positive but result &lt; a -> <span class="warn">panic</span></p>
+    <p style="font-size:0.78em; margin-top:0.3em;">For every <code>+</code> <code>-</code> <code>*</code> <code>/</code> on int8/16/32, uint8/16/32/64, the compiler inserts a check <strong>right after</strong> the operation. If overflow -> panic</p>
+  </section>
+</section>
+
+<!-- ============================================================ -->
+<!-- FEATURE 3: PANIC ON SELECTED FUNCTIONS -->
+<!-- ============================================================ -->
+<section>
+  <section>
+    <h2>Feature 3 &mdash; Panic on selected functions</h2>
+    <p style="font-size:0.82em;">Some software logs errors instead of crashing &mdash; <span class="warn">invisible to fuzzers</span>.<br>
+    gosentry can force a panic when specific functions are called.</p>
+    <pre><code class="language-bash">./bin/go test -fuzz=FuzzHarness --use-libafl \
+  --panic-on="pkg.(*Logger).Warning,pkg.(*Logger).Error" \
+  --focus-on-new-code=false --catch-races=false --catch-leaks=false</code></pre>
+  </section>
+
+  <section>
+    <h2>How it works &mdash; 3-stage pipeline</h2>
+    <div class="two-col">
+      <div>
+        <p style="font-size:0.72em; color:#8b949e; margin-bottom:0.3em;">User writes:</p>
+        <pre><code class="language-bash">--panic-on="pkg.(*Logger).Error"</code></pre>
+        <p style="font-size:0.72em; color:#8b949e; margin-top:0.5em; margin-bottom:0.3em;">Normal SSA:</p>
+        <pre><code class="language-text">v1 = StaticCall Logger.Error</code></pre>
+      </div>
+      <div>
+        <p style="font-size:0.72em; margin-bottom:0.3em;"><span class="warn">gosentry-instrumented SSA:</span></p>
+        <pre><code class="language-text">v0 = panicOnCall("Logger.Error")
+v1 = StaticCall Logger.Error</code></pre>
+        <p style="font-size:0.72em; margin-top:0.5em;">Panic is inserted <strong>before</strong> the call.<br>Fuzzer sees a crash, stops campaign.</p>
+      </div>
+    </div>
+    <ul style="font-size:0.68em; margin-top:0.5em;">
+      <li><strong>1. </strong> <code>go test</code> parses patterns</li>
+      <li><strong>2. </strong> Compiler injects <code>runtime.panicOnCall()</code> in SSA</li>
+      <li><strong>3. </strong> Runtime panics with <code>"panic-on-call: pkg.(*Logger).Error"</code></li>
+    </ul>
+  </section>
+</section>
+
+<!-- ============================================================ -->
+<!-- FEATURE 4: LIBAFL INTEGRATION -->
+<!-- ============================================================ -->
+<section>
+  <section>
+    <h2>Feature 4 &mdash; LibAFL integration</h2>
+    <p style="font-size:0.82em;">Replace Go's native fuzzer with <span class="accent">LibAFL</span> (Rust) &mdash; used <strong>by default</strong>.</p>
+    <p style="font-size:0.75em; color:#8b949e; margin-bottom:0.6em;">Same <code>go test -fuzz</code> CLI, but the engine behind is LibAFL</p>
+    <div class="two-col">
+      <div>
+        <p style="font-size:0.72em; margin-bottom:0.3em;"><span class="warn">Go native fuzzer</span> &mdash; stuck forever:</p>
+        <pre style="font-size:0.95em;"><code class="language-go">if input == "IMARANDOMSTRINGJUSTCMPLOGMEMAN" {
+    panic("illegal")
+}
+// Random byte mutation will
+// basically never match this string</code></pre>
+      </div>
+      <div>
+        <p style="font-size:0.72em; margin-bottom:0.3em;"><span class="green">LibAFL + CMPLOG</span> &mdash; finds it instantly:</p>
+        <pre style="font-size:0.95em;"><code class="language-text">CMPLOG intercepts the == comparison.
+It sees the target constant.
+Next mutation: inject the exact string.
+
+Comparison solved in ~1 iteration.</code></pre>
+      </div>
+    </div>
+    <p style="font-size:0.72em; margin-top:0.5em;">CMPLOG/Redqueen, better scheduling, token extraction, ... &mdash; <span class="accent">the state of the art</span></p>
+  </section>
+
+  <section>
+    <h2>Architecture &mdash; how Go + LibAFL are wired</h2>
+    <p style="font-size:0.68em; color:#8b949e; margin-bottom:0.6em;">Who generates what, who calls what</p>
+    <div style="display:flex; align-items:center; justify-content:center; gap:16px; margin-top:0.5em;">
+      <!-- go test -->
+      <div style="background:rgba(88,166,255,0.12); border:2px solid #58a6ff; border-radius:10px; padding:14px 18px; text-align:center; min-width:160px;">
+        <p style="font-size:0.85em; margin:0;"><strong class="accent">go test</strong></p>
+        <p style="font-size:0.58em; color:#8b949e; margin:0.4em 0 0; line-height:1.5;">captures fuzz callback<br>generates a <code>.go</code> bridge<br>compiles everything</p>
+      </div>
+      <div style="font-size:1.2em; color:#8b949e;">
+        <div style="font-size:0.5em; text-align:center; color:#58a6ff;">produces</div>
+        &rarr;
+      </div>
+      <!-- .a archive -->
+      <div style="background:rgba(88,166,255,0.12); border:2px solid #58a6ff; border-radius:10px; padding:14px 18px; text-align:center; min-width:160px;">
+        <p style="font-size:0.85em; margin:0;"><strong class="accent">.a</strong> <span style="font-size:0.7em; color:#8b949e;">static archive</span></p>
+        <p style="font-size:0.58em; color:#8b949e; margin:0.4em 0 0; line-height:1.5;">test code + deps<br>C bridge (libFuzzer ABI)<br>8-bit coverage counters</p>
+      </div>
+      <div style="font-size:1.2em; color:#8b949e;">
+        <div style="font-size:0.5em; text-align:center; color:#f0883e;">links &amp; calls</div>
+        &rarr;
+      </div>
+      <!-- Rust runner -->
+      <div style="background:rgba(240,136,62,0.12); border:2px solid #f0883e; border-radius:10px; padding:14px 18px; text-align:center; min-width:160px;">
+        <p style="font-size:0.85em; margin:0;"><strong class="warn">Rust runner</strong></p>
+        <p style="font-size:0.58em; color:#8b949e; margin:0.4em 0 0; line-height:1.5;">LibAFL engine<br>mutate &rarr; call Go &rarr; read cov<br>CMPLOG, scheduling, ...</p>
+      </div>
+    </div>
+    <!-- the two key C functions -->
+    <div style="margin-top:1em; display:flex; justify-content:center; gap:24px; font-size:0.65em;">
+      <div style="background:rgba(255,255,255,0.04); border:1px solid #30363d; border-radius:6px; padding:8px 14px; text-align:center;">
+        <code class="accent">LLVMFuzzerInitialize()</code><br>
+        <span style="color:#8b949e;">Rust calls once &rarr; boots Go runtime</span>
+      </div>
+      <div style="background:rgba(255,255,255,0.04); border:1px solid #30363d; border-radius:6px; padding:8px 14px; text-align:center;">
+        <code class="warn">LLVMFuzzerTestOneInput(data)</code><br>
+        <span style="color:#8b949e;">Rust calls per mutation &rarr; runs Go fuzz target</span>
+      </div>
+    </div>
+    <p style="font-size:0.62em; color:#8b949e; margin-top:0.6em;">
+      The <code>.a</code> archive exposes the standard <strong>libFuzzer C ABI</strong> &mdash; LibAFL treats Go exactly like any C/Rust target
+    </p>
+  </section>
+
+  <section>
+    <h2>The Rust side &mdash; fuzz loop in <code>golibafl</code></h2>
+    <p style="font-size:0.68em; color:#8b949e; margin-bottom:0.4em;">
+      <code>golibafl/src/main.rs</code> &mdash; links <code>libharness.a</code> and drives the fuzzing
+    </p>
+    <pre><code class="language-rust">// Step 1: Import the C symbols from libharness.a
+use libafl_targets::{
+    extra_counters,                                   // coverage map
+    libfuzzer::libfuzzer_test_one_input,              // per-input entry
+    libfuzzer_initialize,                             // boot Go runtime
+};
+
+// Step 2: Initialize — Go runtime starts, registers coverage counters
+let init_ret = unsafe { libfuzzer_initialize(&args) };
+
+// Step 3: Define the harness — each iteration calls into Go
+let mut harness = |input: &BytesInput| {
+    let target = input.target_bytes();
+    unsafe { libfuzzer_test_one_input(&target); }    // → Go code runs
+    ExitKind::Ok
+};
+
+// Step 4: Wrap with coverage observer + timeout
+let executor = InProcessExecutor::with_timeout(
+    &mut harness,
+    tuple_list!(edges_observer, time_observer),       // reads .go.fuzzcntrs
+    &mut fuzzer, &mut state, &mut mgr, exec_timeout,
+)?;</code></pre>
+  </section>
+
+  <section>
+    <h2>Coverage &mdash; how Go instrumentation works with LibAFL</h2>
+    <p style="font-size:0.75em; margin-bottom:0.5em;">
+      LibAFL normally expects <span class="warn">LLVM SanitizerCoverage</span> &mdash; 8-bit counters inserted by Clang.<br>
+      Go uses its own compiler (not LLVM). So how does it work?
+    </p>
+    <div style="margin-top:0.8em; background:rgba(88,166,255,0.08); border:1px solid #58a6ff; border-radius:8px; padding:12px 18px; text-align:center; font-size:0.75em;">
+      <strong class="accent">Key takeaway:</strong> Go is <strong>libFuzzer-compatible</strong> (<a href="https://go.dev/src/runtime/libfuzzer.go" style="color:#58a6ff;">runtime/libfuzzer.go</a>). That's the common interface.<br>
+      Any fuzzer that speaks the libFuzzer ABI (LibAFL, AFL++, ...) can fuzz Go code through this glue.
+    </div>
+    <div style="margin-top:0.6em;">
+      <p style="font-size:0.62em; color:#8b949e; margin-bottom:0.3em;">runtime/libfuzzer.go (excerpt)</p>
+<pre><code class="language-go">//go:build libfuzzer
+
+package runtime
+
+// In libFuzzer mode, the compiler inserts calls to libfuzzerTraceCmpN
+// (where N can be 1, 2, 4, or 8) for encountered integer comparisons
+// in the code to be instrumented.
+
+//go:nosplit
+func libfuzzerTraceCmp1(arg0, arg1 uint8, fakePC uint) {
+    fakePC = fakePC % retSledSize
+    libfuzzerCallTraceIntCmp(&amp;__sanitizer_cov_trace_cmp1,
+        uintptr(arg0), uintptr(arg1), uintptr(fakePC))
+}</code></pre>
+    </div>
+  </section>
+ 
+  <section>
+    <h2>Benchmarks &mdash; LibAFL vs Go native</h2>
+    <div class="two-col">
+      <div style="text-align:center;">
+        <p style="font-size:0.72em; margin-bottom:0.3em;"><strong class="accent">Google UUID</strong> &mdash; 5 min campaign</p>
+        <div style="background:rgba(255,255,255,0.05); border:1px solid #30363d; border-radius:8px; padding:16px; font-size:0.62em; text-align:left; font-family:monospace; line-height:1.6;">
+          Lines covered &uarr;<br>
+          <span class="accent">LibAFL &nbsp;&nbsp;: ██████████████████ 180+</span><br>
+          <span class="warn">Go native: ████████ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ~90</span><br><br>
+        </div>
+      </div>
+      <div style="text-align:center;">
+        <p style="font-size:0.72em; margin-bottom:0.3em;"><strong class="accent">go-ethereum</strong> &mdash; 30 min campaign</p>
+        <div style="background:rgba(255,255,255,0.05); border:1px solid #30363d; border-radius:8px; padding:16px; font-size:0.62em; text-align:left; font-family:monospace; line-height:1.6;">
+          Lines covered &uarr;<br>
+          <span class="accent">LibAFL &nbsp;&nbsp;: ████████████████████ 900+</span><br>
+          <span class="warn">Go native: ████████████ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ~550</span><br><br>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</section>
+
+<!-- ============================================================ -->
+<!-- FEATURE 5: GIT-AWARE SCHEDULING -->
+<!-- ============================================================ -->
+<section>
+  <section>
+    <h2>Feature 5 &mdash; Git-aware scheduling (experimental)</h2>
+    <p style="font-size:0.82em;">Bias the fuzzer toward <span class="accent">recently changed code</span> (where bugs are most likely)</p>
+    <pre><code class="language-bash">./bin/go test -fuzz=FuzzXxx --focus-on-new-code=true  --catch-races=false --catch-leaks=false</code></pre>
+    <p style="font-size:0.75em;">Coverage stays as primary signal. Git recency is a <em>scheduling bias</em>.</p>
+  </section>
+
+  <section>
+    <h2>How it works (simplified)</h2>
+    <div class="storyline">
+      <div class="story-step">
+        <strong class="accent">1. Build a map</strong><br>
+        At build time, gosentry maps each coverage counter back to a real <code>file:line</code>,
+        then asks <code>git blame</code> when that line last changed.
+      </div>
+      <div class="story-arrow">&rarr;</div>
+      <div class="story-step">
+        <strong class="accent">2. Fuzz normally</strong><br>
+        LibAFL still does normal coverage-guided fuzzing and remembers which counters each input hits.
+      </div>
+      <div class="story-arrow">&rarr;</div>
+      <div class="story-step">
+        <strong class="accent">3. Add a small bonus</strong><br>
+        If an input reaches a recently changed line, the scheduler gives it a little extra weight and picks it more often.
+      </div>
+    </div> 
+    <p class="small" style="margin-top:0.45em;">Coverage stays first. Git recency only biases which saved inputs get retried more often.</p>
+  </section>
+</section>
+
+<!-- ============================================================ -->
+<!-- FEATURE 6: RACES, LEAKS, HANGS -->
+<!-- ============================================================ -->
+<section>
+  <section>
+    <h2>Feature 6 &mdash; Catch races, leaks &amp; hangs</h2>
+    <div class="two-col" style="font-size:0.78em;">
+      <div>
+        <p><span class="tag">--catch-races</span><br>
+        Replay seeds with <code>-race</code> build &amp; <code>GORACE=halt_on_error=1</code></p>
+        <p><span class="tag">--catch-leaks</span><br>
+        Replay seeds with <code>go.uber.org/goleak</code></p>
+      </div>
+      <div>
+        <p><span class="tag tag-warn">catch-hangs</span> (automatic)<br>
+        Timeout detection + confirmation replays. Configurable via <code>libafl.config.jsonc</code></p>
+        <p class="small">All three stop the campaign on first finding (treat as crash)</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>How it works</h2>
+    <div class="two-col">
+      <div>
+        <p style="font-size:0.72em; margin-bottom:0.3em;"><span class="accent">Main fuzzer</span></p>
+        <pre><code class="language-text">golibafl fuzz loop
+  -> mutate -> execute -> observe
+  -> new coverage? write to queue/</code></pre>
+        <p style="font-size:0.72em; margin-top:0.5em; margin-bottom:0.3em;"><span class="green">Race sidecar</span> (separate binary)</p>
+        <pre><code class="language-text">poll queue/ every 100ms
+  -> replay seed with -race build
+  -> "data race detected"?
+     copy to races/, stop campaign</code></pre>
+      </div>
+      <div>
+        <p style="font-size:0.72em; margin-bottom:0.3em;"><span class="green">Leak sidecar</span> (separate binary)</p>
+        <pre><code class="language-text">poll queue/ every 1s
+  -> replay with goleak enabled
+  -> goroutine leak detected?
+     copy to leaks/, stop campaign</code></pre>
+        <p style="font-size:0.72em; margin-top:0.5em; margin-bottom:0.3em;"><span class="warn">Hang detection</span> (in main runner)</p>
+        <pre><code class="language-text">execution timeout?
+  -> replay N times, larger timeout
+  -> confirmed? hangs/, stop</code></pre>
+      </div>
+    </div>
+  </section>
+</section>
+
+<!-- ============================================================ -->
+<!-- FEATURE 7: GRAMMAR-BASED FUZZING -->
+<!-- ============================================================ -->
+<section>
+  <section>
+    <h2>Feature 7 &mdash; Grammar-based fuzzing</h2>
+    <p style="font-size:0.82em;">Byte-level mutation wastes time on syntactically invalid inputs.<br>
+    Nautilus generates inputs from a <span class="accent">user-provided grammar</span>.</p>
+    <pre><code class="language-json">[
+  ["Expr", "{Term}"],
+  ["Expr", "{Term}+{Expr}"],
+  ["Term", "{Factor}*{Term}"],
+  ["Factor", "({Expr})"],
+  ["Factor", "{Num}"],
+  ["Num", "0"], ["Num", "1"], ["Num", "2"]
+]</code></pre>
+    <p style="font-size:0.72em;">Generates: <code>0+1*(2+0)</code> &mdash; mutates: <code>2*(1+0)+1</code><br>
+    Never produces: <code>0+è1*(@#</code></p>
+  </section>
+
+  <section>
+    <h2>How it works &mdash; Nautilus in LibAFL</h2>
+    <div class="two-col">
+      <div>
+        <p style="font-size:0.72em; margin-bottom:0.3em;"><span class="accent">Where Nautilus plugs in</span></p>
+        <pre><code class="language-text">LibAFL picks one seed from queue/
+  -> Nautilus parses it with grammar.json
+  -> Nautilus mutates the grammar tree
+  -> Nautilus unparses the tree to bytes
+  -> Go harness runs on those bytes
+  -> if coverage grows, keep it</code></pre>
+        <p class="small" style="margin-top:0.4em;">If the corpus is empty, Nautilus generates the first valid seeds from the grammar.</p>
+      </div>
+      <div>
+        <p style="font-size:0.72em; margin-bottom:0.3em;"><span class="accent">Practical mutation example</span></p>
+        <pre><code class="language-text">Grammar idea:
+Expr -> {Num}+{Num}
+Num  -> 0 | 1 | 2 | 3
+
+Seed picked by LibAFL:
+"1+3"
+
+Tree mutation:
+replace right Num("3") with Num("0")
+
+New bytes sent to Go:
+"1+0"</code></pre>
+        <p class="small" style="margin-top:0.4em;">It mutates grammar pieces like <code>Num</code>, not random bytes, so the input stays valid.</p>
+      </div>
+    </div>
+    <p style="font-size:0.72em; margin-top:0.4em;"><strong>Tradeoff:</strong> slower exec/s, but much less time wasted on broken syntax.</p>
+  </section>
+</section>
+
+<!-- ============================================================ -->
+<!-- FEATURE 8: COVERAGE REPORTS -->
+<!-- ============================================================ -->
+<section>
+  <section>
+    <h2>Feature 8 &mdash; Coverage reports in one CLI</h2>
+    <p style="font-size:0.82em;">Generate coverage report from a fuzz campaign</p>
+    <pre><code class="language-bash"># After a campaign:
+./bin/go test -fuzz=FuzzXxx --generate-coverage .</code></pre>
+    <div class="storyline" style="margin-top:0.7em;">
+      <div class="story-step">
+        <strong class="accent">1. Input</strong><br>
+        Use the existing <code>queue/</code> corpus from the <strong>same package</strong> and the <strong>same fuzz target</strong>.
+      </div>
+      <div class="story-arrow">&rarr;</div>
+      <div class="story-step">
+        <strong class="accent">2. Replay</strong><br>
+        gosentry runs every saved input again, but this time with Go coverage instrumentation enabled.
+      </div>
+      <div class="story-arrow">&rarr;</div>
+      <div class="story-step">
+        <strong class="accent">3. Output</strong><br>
+        It writes standard Go files in the campaign coverage dir: <code>cover.out</code> and <code>cover.html</code>.
+      </div>
+    </div>
+    <p class="small" style="margin-top:0.55em;">Good when you already have a strong corpus and just want to see what code that corpus reaches.</p>
+  </section>
+
+</section>
+
+<!-- ============================================================ -->
+<!-- AI / LLM SLIDES -->
+<!-- ============================================================ -->
+<section>
+  <section>
+    <h2>Written with LLMs</h2>
+    <p style="font-size:0.82em; margin-bottom:0.6em;">
+      gosentry requires engineering across <span class="accent">multiple domains</span>:
+    </p>
+    <ul style="font-size:0.78em;">
+      <li>Go compiler internals (SSA passes)</li>
+      <li>Go runtime modifications</li>
+      <li>C ABI / shared library linking</li>
+      <li>Rust + LibAFL fuzzer implementation</li>
+      <li>Git plumbing + binary analysis (addr2line)</li>
+    </ul>
+    <p style="font-size:0.82em; margin-top:0.8em;">
+      Without LLMs, this would have taken <span class="warn">&gt; 1 year</span> of glue engineering.
+    </p>
+    <p style="font-size:0.72em; color:#8b949e; margin-top:0.4em;">
+      The LLM sometimes found the architecture itself, smart enough to make<br>the glue without me explicitly saying "do it that way."
+    </p>
+  </section>
+
+  <section>
+    <h2>How to harness LLMs properly</h2>
+    <p style="font-size:0.72em; color:#8b949e; margin-bottom:0.6em;">Lessons learned creating tooling with LLM: follow <a href="https://openai.com/index/harness-engineering/">OpenAI's harnessing guidelines</a></p>
+    <div style="text-align:left;">
+      <div class="lesson-box"><strong class="green">1.</strong> End-to-end tests: the LLM must prove the feature works</div>
+      <div class="lesson-box"><strong class="green">2.</strong> GitHub workflows to catch regressions</div>
+      <div class="lesson-box"><strong class="green">3.</strong> Tests must pass every time</div>
+      <div class="lesson-box"><strong class="green">4.</strong> Agentic looping: keep the LLM going until it works, never give up</div>
+      <div class="lesson-box"><strong class="green">5.</strong> Internal Markdown as "database"</div>
+      <div class="lesson-box"><strong class="green">6.</strong> AGENTS.md / CLAUDE.md</div>
+      <div class="lesson-box"><strong class="green">7.</strong> etc, see https://openai.com/index/harness-engineering</div>
+    </div>
+  </section>
+</section>
+ 
+</div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/highlight/highlight.js"></script>
+<script>
+  Reveal.initialize({
+    hash: true,
+    slideNumber: true,
+    transition: 'slide',
+    plugins: [ RevealHighlight ],
+    width: 1280,
+    height: 720,
+  });
+</script>
+</body>
+</html>
