@@ -256,6 +256,20 @@ section > p { max-width: var(--measure); margin: 0 0 14px; }
   font-size: 0.8em;
   top: 0.15em;
 }
+/* internships: labelled, one step down in the hierarchy */
+.cv > li.is-intern .cv-body h3 { color: var(--muted); font-weight: 500; }
+.tag-intern {
+  margin-left: 0.45em;
+  font-family: var(--mono);
+  font-size: 0.62rem;
+  font-weight: 400;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--muted);
+  vertical-align: 0.14em;
+  white-space: nowrap;
+}
+
 .edu-list > li { padding: 11px 0; }
 .edu-list h3 { font-weight: 400; font-size: 0.96rem; }
 
