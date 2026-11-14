@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tracing the L50s Pro Ultra camera PIN · Kevin Valerio</title>
+  <meta name="description" content="Tracing the Dreame L50s Pro Ultra camera PIN through MIoT actions and Tencent XP2P session setup.">
+  <meta property="og:title" content="Tracing the L50s Pro Ultra camera PIN">
+  <meta property="og:description" content="The Dreame camera PIN travels through a nested MIoT action before video starts.">
+  <meta property="og:type" content="article">
+  <meta name="theme-color" content="#fdfcfa">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%23b4552d'/%3E%3Ctext x='50' y='70' font-size='54' text-anchor='middle' fill='%23fdfcfa' font-family='Georgia,serif'%3Ekv%3C/text%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=STIX+Two+Text:ital,wght@0,400..700;1,400..700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <script>if (localStorage.getItem('theme') === 'dark') document.documentElement.dataset.theme = 'dark';</script>
+  <link rel="stylesheet" href="../style.css">
+</head>
+<body>
+
+<nav class="nav" aria-label="Site">
+  <div class="nav-inner">
+    <ul>
+      <li><a href="../index.html">Home</a></li>
+      <li><a href="index.html" class="active">Blog</a></li>
+    </ul>
+    <button id="theme-toggle" class="theme-btn" type="button" aria-label="Toggle dark theme">dark</button>
+  </div>
+</nav>
+
+<main class="post">
+  <article>
+    <header class="post-head">
+      <p class="post-meta"><time datetime="2026-11-14">14 Nov 2026</time> · device research</p>
+      <h1>Tracing the L50s Pro Ultra camera PIN</h1>
+      <p class="post-dek">The PIN digest is in a JSON string passed as an MIoT action input.</p>
+    </header>
+
+    <p>I bought a Dreame L50s Pro Ultra to see how its live camera is authorized. <a href="https://global.dreametech.com/pages/l50s-pro-ultra-user-manual">Dreame's manual</a> identifies it as <code>RLL88HE</code> and lists an IR camera, an HD camera, and microphones. <a href="https://github.com/Tasshack/dreame-vacuum/issues/1933">Tasshack found</a> that current firmware gates the stream with a PIN. I wanted to locate that check.</p>
+
+    <figure class="post-product">
+      <a href="https://forum.dreametech.com/forum.php?extra=page%3D1&amp;mobile=no&amp;mod=viewthread&amp;page=22&amp;tid=1345#post_6364" aria-label="Original L50s Pro Ultra owner photo on Dreame Forum"><img src="images/l50s-pro-ultra-owner.jpg" alt="Dreame L50s Pro Ultra robot parked in its dock on a tiled floor" width="3024" height="4032"></a>
+    </figure>
+
+    <h2>Provider selection</h2>
+    <p><a href="https://github.com/Tasshack/dreame-vacuum/issues/1933">Tasshack's camera research</a> lists the L50s Pro Ultra under suggested Tencent models and calls the stream "session-based and on-demand." Some devices select Tencent or Alibaba by region. The unit advertised <code>STREAM_TX</code>. I also read camera service property <code>10001/11</code>, named <code>STREAM_VENDOR</code> in <a href="https://github.com/Tasshack/dreame-vacuum/blob/fec086caf064f2681e8bcc7be20a0d0ef54f444d/custom_components/dreame_vacuum/dreame/types.py#L1947-L1965">the integration's property map</a>.</p>
+
+    <h2>The PIN request has two JSON layers</h2>
+    <p>I filtered the camera requests to service <code>10001</code>. The PIN verification uses <code>method=action</code>, action ID <code>4</code>, and input ID <code>1102</code>. Its <code>value</code> is a JSON string inside the outer JSON request. A single parse leaves <code>oldcode</code> and <code>session</code> inside a string.</p>
+    <pre><code>{
+  "method": "action",
+  "params": {
+    "siid": 10001, "aiid": 4,
+    "in": [{"piid": 1102,
+            "value": "{\"oldcode\":\"&lt;sha256&gt;\",\"lazymode\":0,\"session\":\"&lt;sid&gt;\"}"}]
+  }
+}</code></pre>
+    <pre><code>jq -cr '
+  .data
+  | select(.method == "action" and .params.siid == 10001)
+  | [.params.aiid, .params.in[0].piid,
+     (.params.in[0].value | fromjson | keys)]
+' miio.jsonl</code></pre>
+
+    <p>The filter keeps action IDs and field names while dropping the PIN hash and session value. The client hashes only four digits. A captured <code>oldcode</code> can be checked against all 10,000 PINs. For one candidate, <code>printf '%s' '0042' | shasum -a 256</code> preserves the leading zeros and adds no newline.</p>
+    <p>The reduced sequence is <code>4/1100</code> to open the monitor, <code>4/1102</code> to verify the PIN, and <code>1/1</code> to start video. The same session ID appears in all three requests.</p>
+
+    <figure>
+      <a href="images/l50s-action-trace.png"><img src="images/l50s-action-trace.png" alt="Terminal output from a redacted, reconstructed camera action sequence showing the open, PIN verification, and video start fields" width="1480" height="420" loading="lazy"></a>
+      <figcaption>Terminal run on a reconstructed request set. Action fields cross-checked against <a href="https://github.com/Web3Dave/dreame-vacuum-unlocked/blob/main/dreame_vacuum_unlocked/app.py#L239-L251">Web3Dave's action wrapper</a> and <a href="https://github.com/Web3Dave/dreame-vacuum-unlocked/blob/main/dreame_vacuum_unlocked/app.py#L330-L357">camera startup code</a>.</figcaption>
+    </figure>
+
+    <p>Input <code>1102</code> is easy to misread. The <a href="https://github.com/Tasshack/dreame-vacuum/blob/fec086caf064f2681e8bcc7be20a0d0ef54f444d/custom_components/dreame_vacuum/dreame/types.py">property map</a> names it <code>STREAM_VERIFY_CODE</code>, but the activation request puts it under <code>params.in</code> for action <code>4</code>. Reading property <code>10001/1102</code> alone misses this call.</p>
+
+    <h2>The session ID is client generated</h2>
+    <p>The client generates a fresh session ID for the open request. The verify request sends <code>oldcode</code> as the SHA-256 hex digest of the four-digit PIN, with <code>lazymode=0</code> and the same session.</p>
+    <p>The video request then sends <code>token=tx</code>, <code>channelId=&lt;productId&gt;/&lt;deviceName&gt;</code>, and that session ID. <a href="https://github.com/Web3Dave/dreame-vacuum-unlocked/blob/main/dreame_vacuum_unlocked/app.py#L330-L357">Web3Dave's open implementation</a> matches this action order.</p>
+
+    <p>I compared a wrong PIN with a correct one by recording both replies. The failed <code>4/1102</code> reply had a nonzero <code>data.result.code</code>. The <code>1/1</code> action still went out, but it also failed and no media packets arrived. <a href="https://github.com/Web3Dave/dreame-vacuum-unlocked/blob/main/dreame_vacuum_unlocked/app.py#L322-L345">Web3Dave's <code>_check()</code></a> logs a failed reply but does not stop the next action. A trace containing <code>1/1</code> therefore does not show that the PIN was accepted.</p>
+
+    <p>After a successful start, the viewer calls <a href="https://github.com/Web3Dave/dreame-vacuum-unlocked/blob/main/dreame_vacuum_unlocked/app.py#L360-L375"><code>dreame-third-video/tx/dev/getP2PInfo</code></a> and passes the returned <code>p2pInfo</code> to the XP2P client. The MIoT session ID and this transport data are separate values.</p>
+
+    <p>The remaining check is inside the robot's <code>10001/4</code> handler. I want to see where it stores an accepted session, how it counts failed PIN attempts, and whether the video action checks that session again.</p>
+
+    <p class="post-back"><a href="index.html">← Back to blog</a></p>
+  </article>
+</main>
+
+<script>
+  const themeBtn = document.getElementById('theme-toggle');
+  const themeMeta = document.querySelector('meta[name="theme-color"]');
+  function syncTheme() {
+    const dark = document.documentElement.dataset.theme === 'dark';
+    themeBtn.textContent = dark ? 'light' : 'dark';
+    themeMeta.content = dark ? '#161514' : '#fdfcfa';
+  }
+  themeBtn.addEventListener('click', () => {
+    if (document.documentElement.dataset.theme === 'dark') {
+      delete document.documentElement.dataset.theme;
+      localStorage.removeItem('theme');
+    } else {
+      document.documentElement.dataset.theme = 'dark';
+      localStorage.setItem('theme', 'dark');
+    }
+    syncTheme();
+  });
+  syncTheme();
+</script>
+
+</body>
+</html>
